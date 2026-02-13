@@ -1,0 +1,7 @@
+{
+  "name": "AI Study Copilot",
+  "description": "Trợ lý học tập AI cá nhân hóa cho học sinh THPT Việt Nam, hỗ trợ phân tích tài liệu, theo dõi năng lực và tạo lộ trình học tối ưu.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
