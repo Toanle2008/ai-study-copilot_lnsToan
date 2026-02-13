@@ -264,13 +264,13 @@ const App: React.FC = () => {
               </button>
             </div>
 
-            <div className="aspect-video w-full bg-black relative flex items-center justify-center">
+            <div className="aspect-video w-full bg-black relative">
               <iframe
                 className="w-full h-full"
-                src="https://youtu.be/CtMeT4EQ4fQ"
-                title="Hướng dẫn sử dụng AI Study Copilot"
+                src="https://www.youtube.com/embed/CtMeT4EQ4fQ"
+                title="Intro Video"
                 frameBorder="0"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                 allowFullScreen
               />
             </div>
