@@ -73,10 +73,11 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ profile, messages, setMessages })
     };
   }, [isCameraOpen]);
 
+  // Chụp ảnh từ video stream và chuyển thành File
   const takePhoto = () => {
-    if (videoRef.current && canvasRef.current) {
-      const video = videoRef.current;
-      const canvas = canvasRef.current;
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (video && canvas) {
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
       const ctx = canvas.getContext('2d');
@@ -87,7 +88,8 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ profile, messages, setMessages })
         const ab = new ArrayBuffer(byteString.length);
         const ia = new Uint8Array(ab);
         for (let i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i);
-        const file = new File([ab], `camera_${Date.now()}.jpg`, { type: 'image/jpeg' });
+        // Use the Uint8Array (ia) which contains the data as a BlobPart
+        const file = new File([ia], `camera_${Date.now()}.jpg`, { type: 'image/jpeg' });
         
         setPendingAttachments(prev => [...prev, { file, base64: base64.split(',')[1] }]);
         setIsCameraOpen(false);
@@ -99,7 +101,8 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ profile, messages, setMessages })
     const files = e.target.files;
     if (!files) return;
 
-    Array.from(files).forEach(file => {
+    // Explicitly type the iterator to prevent 'unknown' inference for 'file'
+    Array.from(files as FileList).forEach((file: File) => {
       const reader = new FileReader();
       reader.onload = (event) => {
         const base64 = event.target?.result?.toString().split(',')[1];
@@ -107,6 +110,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ profile, messages, setMessages })
           setPendingAttachments(prev => [...prev, { file, base64 }]);
         }
       };
+      // Explicitly ensuring file is passed as a Blob (File inherits from Blob)
       reader.readAsDataURL(file);
     });
     // Reset input

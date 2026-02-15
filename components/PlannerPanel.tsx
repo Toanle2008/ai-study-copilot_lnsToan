@@ -13,8 +13,8 @@ interface PlannerPanelProps {
 }
 
 const PlannerPanel: React.FC<PlannerPanelProps> = ({ profile, documents }) => {
-  // State cho Wizard
   const [step, setStep] = useState(1);
+  const [loadingMessage, setLoadingMessage] = useState('Đang bắt đầu...');
   const [selection, setSelection] = useState({
     subject: profile.subjects.find(s => s.isActive)?.name || 'Toán',
     topic: '',
@@ -26,7 +26,27 @@ const PlannerPanel: React.FC<PlannerPanelProps> = ({ profile, documents }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [hasPlan, setHasPlan] = useState(false);
 
-  // Mẫu bài học phổ biến (Database mockup sau này)
+  const loadingSteps = [
+    "Đang tìm kiếm tài liệu liên quan...",
+    "Đang phân tích lỗ hổng kiến thức...",
+    "Đang xây dựng các task hành động...",
+    "Đang tối ưu hóa thứ tự ưu tiên...",
+    "Đang hoàn thiện lộ trình master..."
+  ];
+
+  useEffect(() => {
+    let interval: any;
+    if (isLoading) {
+      let idx = 0;
+      setLoadingMessage(loadingSteps[0]);
+      interval = setInterval(() => {
+        idx = (idx + 1) % loadingSteps.length;
+        setLoadingMessage(loadingSteps[idx]);
+      }, 1200);
+    }
+    return () => clearInterval(interval);
+  }, [isLoading]);
+
   const commonTopics: Record<string, string[]> = {
     'Toán': ['Khảo sát hàm số', 'Tích phân', 'Hình học không gian', 'Xác suất thống kê'],
     'Vật Lý': ['Dao động điều hòa', 'Sóng cơ', 'Điện xoay chiều', 'Vật lý hạt nhân'],
@@ -53,7 +73,7 @@ const PlannerPanel: React.FC<PlannerPanelProps> = ({ profile, documents }) => {
         dueDate: 'Trong hôm nay'
       }));
       setTasks(formattedTasks);
-      setStep(4); // Sang bước hiển thị kết quả
+      setStep(4);
     } catch (error) {
       console.error(error);
     } finally {
@@ -73,30 +93,29 @@ const PlannerPanel: React.FC<PlannerPanelProps> = ({ profile, documents }) => {
 
   const activeSubjects = profile.subjects.filter(s => s.isActive);
 
-  // Render Wizard
   const renderWizard = () => {
     if (isLoading) {
       return (
-        <div className="flex flex-col items-center justify-center py-20 animate-pulse">
-          <div className="bg-indigo-600/10 p-6 rounded-full mb-6">
-            <RefreshCw className="animate-spin text-indigo-600" size={48} />
+        <div className="flex flex-col items-center justify-center py-20 animate-in fade-in duration-500">
+          <div className="bg-indigo-600/10 p-8 rounded-full mb-8 relative">
+            <div className="absolute inset-0 bg-indigo-500 rounded-full blur-2xl opacity-20 animate-pulse"></div>
+            <RefreshCw className="animate-spin text-indigo-600 relative z-10" size={56} />
           </div>
-          <h3 className="text-xl font-bold text-slate-800 dark:text-white mb-2">Đang thiết kế lộ trình chuyên sâu...</h3>
-          <p className="text-slate-500 dark:text-slate-400 text-sm italic">AI đang đọc {documents.length} tài liệu của bạn để giải quyết vấn đề "{selection.weakness}"</p>
+          <h3 className="text-2xl font-black text-slate-800 dark:text-white mb-2 tracking-tight transition-all">{loadingMessage}</h3>
+          <p className="text-slate-400 dark:text-slate-500 text-xs font-bold uppercase tracking-widest animate-pulse">Powered by Gemini Flash-Lite ⚡</p>
         </div>
       );
     }
 
-    if (step === 4) return null; // Hiển thị kết quả
+    if (step === 4) return null;
 
     return (
       <div className="max-w-3xl mx-auto space-y-8 py-10">
         <div className="text-center space-y-4">
-          <h2 className="text-3xl font-black text-slate-800 dark:text-white">Hôm nay bạn muốn "master" bài nào?</h2>
+          <h2 className="text-3xl font-black text-slate-800 dark:text-white uppercase tracking-tight">Học gì hôm nay?</h2>
           <p className="text-slate-500 dark:text-slate-400">Chọn mục tiêu để Copilot tạo lộ trình bám sát tài liệu cá nhân.</p>
         </div>
 
-        {/* Wizard Steps Indicator */}
         <div className="flex items-center justify-center gap-4">
           {[1, 2, 3].map(s => (
             <div key={s} className={`flex items-center gap-2 ${step >= s ? 'text-indigo-600' : 'text-slate-300'}`}>
@@ -108,7 +127,6 @@ const PlannerPanel: React.FC<PlannerPanelProps> = ({ profile, documents }) => {
           ))}
         </div>
 
-        {/* Wizard Card */}
         <div className="bg-white dark:bg-[#0f1115] rounded-3xl border border-slate-100 dark:border-slate-800 p-8 shadow-xl transition-all">
           {step === 1 && (
             <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
@@ -205,7 +223,6 @@ const PlannerPanel: React.FC<PlannerPanelProps> = ({ profile, documents }) => {
 
       {step === 4 && (
         <>
-          {/* Header Result */}
           <div className="bg-white dark:bg-[#0f1115] rounded-[2rem] border border-slate-100 dark:border-slate-800 p-8 shadow-sm transition-all overflow-hidden relative">
             <div className="flex flex-col lg:flex-row gap-10 items-start">
               <div className="flex-1 space-y-6">
@@ -258,7 +275,6 @@ const PlannerPanel: React.FC<PlannerPanelProps> = ({ profile, documents }) => {
             </div>
           </div>
 
-          {/* Task Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2 space-y-4">
               <div className="flex items-center justify-between px-2 mb-4">
@@ -305,7 +321,6 @@ const PlannerPanel: React.FC<PlannerPanelProps> = ({ profile, documents }) => {
               </div>
             </div>
 
-            {/* Sidebar Sources */}
             <div className="space-y-6">
               <div className="bg-indigo-600 rounded-[2rem] p-6 text-white shadow-xl">
                 <h4 className="font-bold flex items-center gap-2 mb-4">

@@ -1,16 +1,83 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { Message, StudentProfile, Document } from "./types";
+import { Message, StudentProfile, Document, SubjectGrades } from "./types";
 
-/**
- * Khởi tạo client AI.
- */
 const getAIClient = () => {
   const apiKey = process.env.API_KEY;
   if (!apiKey || apiKey === "") {
     throw new Error("API_KEY_MISSING");
   }
   return new GoogleGenAI({ apiKey });
+};
+
+// Hàm phụ để tính TBM giúp AI có dữ liệu chính xác nhất
+const calculateAvg = (grades: SubjectGrades) => {
+  let totalPoints = 0;
+  let totalWeight = 0;
+  grades.frequent.filter(g => g !== null).forEach(g => { totalPoints += Number(g); totalWeight += 1; });
+  if (grades.midterm !== null) { totalPoints += Number(grades.midterm) * 2; totalWeight += 2; }
+  if (grades.final !== null) { totalPoints += Number(grades.final) * 3; totalWeight += 3; }
+  return totalWeight === 0 ? 0 : parseFloat((totalPoints / totalWeight).toFixed(2));
+};
+
+export const generateProfileAnalysis = async (profile: StudentProfile) => {
+  try {
+    const ai = getAIClient();
+    
+    // Chuẩn bị dữ liệu đã tính toán để AI không bị nhầm lẫn
+    const subjectsSummary = profile.subjects
+      .filter(s => s.isActive)
+      .map(s => ({
+        name: s.name,
+        avg: calculateAvg(s.grades),
+        frequent: s.grades.frequent,
+        midterm: s.grades.midterm,
+        final: s.grades.final
+      }));
+
+    const prompt = `
+      PHÂN TÍCH HỌC BẠ HỌC SINH (Thời gian: ${new Date().toLocaleString()})
+      Học sinh: ${profile.name} - Lớp: ${profile.grade}
+      Mục tiêu: ${profile.focusSubject}
+      
+      Dữ liệu điểm số hiện tại (Đã tính toán TBM):
+      ${JSON.stringify(subjectsSummary)}
+      
+      Lỗi sai gần đây: ${JSON.stringify(profile.recentErrors)}
+
+      YÊU CẦU:
+      1. Đưa ra nhận xét CÁ NHÂN HÓA, không được lặp lại khuôn mẫu cũ nếu điểm số đã thay đổi.
+      2. Status: Một câu cực ngắn về phong độ (VD: "Bứt phá ngoạn mục", "Cảnh báo sa sút", "Ổn định").
+      3. Overview: Đánh giá dựa trên TBM các môn so với mục tiêu khối thi.
+      4. Gaps: Chỉ ra môn nào có điểm thành phần (thường xuyên/giữa kỳ) thấp bất thường.
+      5. Strategy: 3 hành động cụ thể để cải thiện TBM trong kỳ tới.
+
+      Trả về định dạng JSON: { status, overview, gaps, strategy: [] }
+    `;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: prompt,
+      config: {
+        thinkingConfig: { thinkingBudget: 0 },
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            status: { type: Type.STRING },
+            overview: { type: Type.STRING },
+            gaps: { type: Type.STRING },
+            strategy: { type: Type.ARRAY, items: { type: Type.STRING } },
+          },
+          required: ["status", "overview", "gaps", "strategy"]
+        }
+      }
+    });
+    return JSON.parse(response.text || "{}");
+  } catch (error) {
+    console.error("AI Analysis Error:", error);
+    return null;
+  }
 };
 
 export const chatWithAI = async (
@@ -20,16 +87,12 @@ export const chatWithAI = async (
 ) => {
   try {
     const ai = getAIClient();
-    
-    // Xây dựng nội dung cho lượt chat hiện tại
     const history = messages.slice(0, -1).map((m) => ({
       role: m.role,
       parts: [{ text: m.text }],
     }));
 
     const lastMessage = messages[messages.length - 1];
-    
-    // Chuẩn bị các phần của tin nhắn cuối cùng (Text + Attachments)
     const currentParts: any[] = [{ text: lastMessage.text }];
     if (attachments && attachments.length > 0) {
       attachments.forEach(att => {
@@ -49,20 +112,15 @@ export const chatWithAI = async (
         { role: 'user', parts: currentParts }
       ],
       config: {
-        systemInstruction: `Bạn là **AI Study Copilot** – gia sư học tập cá nhân 24/7 cho học sinh THPT Việt Nam.
-Bạn hỗ trợ giải bài tập qua hình ảnh, phân tích tài liệu và trả lời câu hỏi.
-Mọi công thức toán học PHẢI sử dụng LaTeX $...$. 
-Hãy trả lời bằng tiếng Việt thân thiện, dễ hiểu. 
-Thông tin học sinh: ${JSON.stringify(profile)}.`,
+        systemInstruction: `Bạn là AI Study Copilot cho học sinh Việt Nam. 
+Hỗ trợ giải bài qua hình ảnh, phân tích tài liệu. 
+Công thức toán PHẢI dùng LaTeX $...$.
+Thông tin: ${JSON.stringify(profile)}.`,
       },
     });
     return response.text;
   } catch (error: any) {
-    if (error.message === "API_KEY_MISSING") {
-      return "⚠️ **Lỗi cấu hình:** Chưa tìm thấy API Key.";
-    }
-    console.error("Gemini Error:", error);
-    return "Hệ thống đang bận một chút, bạn thử lại sau nhé! 🚀";
+    return "Hệ thống đang bận, thử lại sau nhé! 🚀";
   }
 };
 
@@ -70,20 +128,18 @@ export const analyzeDocument = async (base64Data: string, mimeType: string) => {
   try {
     const ai = getAIClient();
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash-image",
+      model: "gemini-2.5-flash-lite-latest",
       contents: {
         parts: [
           { inlineData: { data: base64Data, mimeType } },
-          {
-            text: "Trích xuất và tóm tắt nội dung chính từ tài liệu này. Chuyển mọi công thức sang định dạng LaTeX $...$.",
-          },
+          { text: "Tóm tắt tài liệu này. Công thức dùng LaTeX $...$." },
         ],
       },
+      config: { thinkingConfig: { thinkingBudget: 0 } }
     });
     return response.text;
   } catch (error) {
-    console.error(error);
-    return "Không thể phân tích tài liệu này. Vui lòng kiểm tra định dạng file.";
+    return "Không thể phân tích tài liệu.";
   }
 };
 
@@ -99,17 +155,13 @@ export const generateGroundedStudyPlan = async (
       .map((d) => d.content)
       .join("\n\n");
 
-    const prompt = `
-      Dựa trên thông tin học sinh: ${profile.name}, lớp ${profile.grade}.
-      Tài liệu tham khảo hiện có: ${relevantDocs.substring(0, 5000)}
-      Hãy tạo lộ trình học tập chi tiết cho bài học "${selection.topic}" môn ${selection.subject}. 
-      Học sinh đang gặp khó khăn cụ thể: "${selection.weakness}".
-    `;
+    const prompt = `Lớp ${profile.grade}. Bài "${selection.topic}" môn ${selection.subject}. Vấn đề: "${selection.weakness}". Tài liệu: ${relevantDocs.substring(0, 2000)}. Lập lộ trình học nhanh.`;
 
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: prompt,
       config: {
+        thinkingConfig: { thinkingBudget: 0 },
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
@@ -132,12 +184,9 @@ export const generateGroundedStudyPlan = async (
         },
       },
     });
-
-    const text = response.text?.trim() || '{"strategicGoals": [], "tasks": []}';
-    return JSON.parse(text);
+    return JSON.parse(response.text || '{}');
   } catch (error) {
-    console.error("Planner AI Error:", error);
-    return { strategicGoals: ["Lỗi kết nối AI"], tasks: [] };
+    return { strategicGoals: ["Lỗi kết nối"], tasks: [] };
   }
 };
 
@@ -147,16 +196,18 @@ export const generateLessonSummary = async (
 ) => {
   try {
     const ai = getAIClient();
-    const prompt = `
-      Tóm tắt bài học "${selection.lesson}" (${selection.subject} - ${selection.grade} - ${selection.series}).
-      Yêu cầu tóm tắt logic theo phong cách NotebookLM, bao gồm sơ đồ tri thức.
-      Mọi công thức toán/lý/hóa PHẢI dùng LaTeX $...$.
-    `;
+    const prompt = `Tóm tắt bài "${selection.lesson}" (${selection.subject} - ${selection.grade} - ${selection.series}). 
+Yêu cầu: 
+1. KeyConcepts: 3-4 mục. 
+2. Mindmap: cấu trúc phân cấp rõ ràng (node -> children).
+3. LaTeX $...$ for equations. 
+Return JSON.`;
 
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: prompt,
       config: {
+        thinkingConfig: { thinkingBudget: 0 },
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
@@ -194,12 +245,13 @@ export const generateLessonSummary = async (
               },
             },
           },
+          required: ["title", "keyConcepts", "mindmap"],
         },
       },
     });
     return JSON.parse(response.text || "{}");
   } catch (error) {
     console.error(error);
-    return { title: "Lỗi kết nối", briefing: "Vui lòng thử lại sau." };
+    return { title: "Lỗi kết nối", briefing: "Thử lại sau." };
   }
 };
