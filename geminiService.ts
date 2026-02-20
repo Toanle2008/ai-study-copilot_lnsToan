@@ -1,5 +1,5 @@
 
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI, Type, ThinkingLevel } from "@google/genai";
 import { Message, StudentProfile, Document, SubjectGrades } from "./types";
 
 const getAIClient = () => {
@@ -59,7 +59,7 @@ export const generateProfileAnalysis = async (profile: StudentProfile) => {
       model: "gemini-3-flash-preview",
       contents: prompt,
       config: {
-        thinkingConfig: { thinkingBudget: 0 },
+        thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
@@ -112,6 +112,7 @@ export const chatWithAI = async (
         { role: 'user', parts: currentParts }
       ],
       config: {
+        thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
         systemInstruction: `Bạn là AI Study Copilot cho học sinh Việt Nam. 
 Hỗ trợ giải bài qua hình ảnh, phân tích tài liệu. 
 Công thức toán PHẢI dùng LaTeX $...$.
@@ -121,6 +122,63 @@ Thông tin: ${JSON.stringify(profile)}.`,
     return response.text;
   } catch (error: any) {
     return "Hệ thống đang bận, thử lại sau nhé! 🚀";
+  }
+};
+
+export const chatWithAIStream = async (
+  messages: Message[],
+  profile: StudentProfile,
+  onChunk: (chunk: string) => void,
+  attachments?: { data: string; mimeType: string }[]
+) => {
+  try {
+    const ai = getAIClient();
+    const history = messages.slice(0, -1).map((m) => ({
+      role: m.role,
+      parts: [{ text: m.text }],
+    }));
+
+    const lastMessage = messages[messages.length - 1];
+    const currentParts: any[] = [{ text: lastMessage.text }];
+    if (attachments && attachments.length > 0) {
+      attachments.forEach(att => {
+        currentParts.push({
+          inlineData: {
+            data: att.data,
+            mimeType: att.mimeType
+          }
+        });
+      });
+    }
+
+    const response = await ai.models.generateContentStream({
+      model: "gemini-3-flash-preview",
+      contents: [
+        ...history,
+        { role: 'user', parts: currentParts }
+      ],
+      config: {
+        thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+        systemInstruction: `Bạn là AI Study Copilot cho học sinh Việt Nam. 
+Hỗ trợ giải bài qua hình ảnh, phân tích tài liệu. 
+Công thức toán PHẢI dùng LaTeX $...$.
+Thông tin: ${JSON.stringify(profile)}.`,
+      },
+    });
+
+    let fullText = "";
+    for await (const chunk of response) {
+      const text = chunk.text;
+      if (text) {
+        fullText += text;
+        onChunk(fullText);
+      }
+    }
+    return fullText;
+  } catch (error: any) {
+    console.error("Streaming error:", error);
+    onChunk("Hệ thống đang bận, thử lại sau nhé! 🚀");
+    return "";
   }
 };
 
