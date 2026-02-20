@@ -24,7 +24,6 @@ export const generateProfileAnalysis = async (profile: StudentProfile) => {
   try {
     const ai = getAIClient();
     
-    // Chuẩn bị dữ liệu đã tính toán để AI không bị nhầm lẫn
     const subjectsSummary = profile.subjects
       .filter(s => s.isActive)
       .map(s => ({
@@ -46,20 +45,19 @@ export const generateProfileAnalysis = async (profile: StudentProfile) => {
       Lỗi sai gần đây: ${JSON.stringify(profile.recentErrors)}
 
       YÊU CẦU:
-      1. Đưa ra nhận xét CÁ NHÂN HÓA, không được lặp lại khuôn mẫu cũ nếu điểm số đã thay đổi.
+      1. Đưa ra nhận xét CÁ NHÂN HÓA.
       2. Status: Một câu cực ngắn về phong độ (VD: "Bứt phá ngoạn mục", "Cảnh báo sa sút", "Ổn định").
       3. Overview: Đánh giá dựa trên TBM các môn so với mục tiêu khối thi.
-      4. Gaps: Chỉ ra môn nào có điểm thành phần (thường xuyên/giữa kỳ) thấp bất thường.
-      5. Strategy: 3 hành động cụ thể để cải thiện TBM trong kỳ tới.
+      4. Gaps: Chỉ ra môn nào có điểm thành phần thấp bất thường.
+      5. Strategy: 3 hành động cụ thể để cải thiện TBM.
 
-      Trả về định dạng JSON: { status, overview, gaps, strategy: [] }
+      Trả về định dạng JSON: { "status": string, "overview": string, "gaps": string, "strategy": string[] }
     `;
 
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash-lite-latest",
       contents: prompt,
       config: {
-        thinkingConfig: { thinkingBudget: 0 },
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,

@@ -2,8 +2,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { StudentProfile, SubjectInfo, SubjectGrades } from '../types';
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell } from 'recharts';
-import { 
-  Target, TrendingUp, Award, GraduationCap, Star, Edit2, Check, X, 
+import { Target, TrendingUp, Award, GraduationCap, Star, Edit2, Check, X, 
   Plus, ToggleLeft, ToggleRight, Sparkles, Bot, AlertCircle, Lightbulb,
   RefreshCw, ChevronRight
 } from 'lucide-react';
