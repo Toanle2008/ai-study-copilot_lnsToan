@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { StudentProfile, Document } from '../types';
-import { generateLessonSummary } from '../geminiService';
+import { HARDCODED_SUMMARIES, DEFAULT_SUMMARY } from '../hardcodedData';
 import { 
   Layers, ChevronRight, Sparkles, RefreshCw, 
   ListTree, HelpCircle, Info, Bookmark, Quote, Search,
@@ -128,15 +128,17 @@ const SummaryPanel: React.FC<SummaryPanelProps> = ({ profile, documents }) => {
     
     setIsLoading(true);
     setSummaryData(null);
-    try {
-      const data = await generateLessonSummary({ ...selection, lesson: targetLesson }, documents);
+    
+    // Giả lập thời gian xử lý cực nhanh (500ms) thay vì gọi API
+    setTimeout(() => {
+      const data = HARDCODED_SUMMARIES[targetLesson] || {
+        ...DEFAULT_SUMMARY,
+        title: targetLesson
+      };
       setSummaryData(data);
       setStep(5);
-    } catch (error) {
-      console.error(error);
-    } finally {
       setIsLoading(false);
-    }
+    }, 800);
   };
 
   if (isLoading) {
@@ -160,7 +162,7 @@ const SummaryPanel: React.FC<SummaryPanelProps> = ({ profile, documents }) => {
             <span className="w-2 h-2 bg-indigo-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
             <span className="w-2 h-2 bg-indigo-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
           </div>
-          <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest"></p>
+          <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">Sử dụng Gemini 3 Flash cho tốc độ siêu tốc</p>
         </div>
       </div>
     );

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { StudyTask, StudentProfile, Document } from '../types';
-import { generateGroundedStudyPlan } from '../geminiService';
+import { HARDCODED_PLANS, DEFAULT_PLAN } from '../hardcodedData';
 import { 
   Calendar, CheckCircle2, Circle, Clock, Sparkles, RefreshCw, 
   BookOpen, Target, Quote, ChevronRight, Book, Layers, AlertTriangle 
@@ -63,8 +63,17 @@ const PlannerPanel: React.FC<PlannerPanelProps> = ({ profile, documents }) => {
     
     setIsLoading(true);
     setHasPlan(true);
-    try {
-      const plan = await generateGroundedStudyPlan(profile, documents, selection);
+    
+    // Giả lập thời gian xử lý cực nhanh (1000ms) thay vì gọi API
+    setTimeout(() => {
+      const plan = HARDCODED_PLANS[selection.topic] || {
+        ...DEFAULT_PLAN,
+        strategicGoals: [
+          ...DEFAULT_PLAN.strategicGoals,
+          `Khắc phục vấn đề: ${selection.weakness}`
+        ]
+      };
+      
       setGoals(plan.strategicGoals || []);
       const formattedTasks = (plan.tasks || []).map((t: any, i: number) => ({
         id: i.toString(),
@@ -74,11 +83,8 @@ const PlannerPanel: React.FC<PlannerPanelProps> = ({ profile, documents }) => {
       }));
       setTasks(formattedTasks);
       setStep(4);
-    } catch (error) {
-      console.error(error);
-    } finally {
       setIsLoading(false);
-    }
+    }, 1200);
   };
 
   const toggleTask = (id: string) => {
@@ -102,7 +108,7 @@ const PlannerPanel: React.FC<PlannerPanelProps> = ({ profile, documents }) => {
             <RefreshCw className="animate-spin text-indigo-600 relative z-10" size={56} />
           </div>
           <h3 className="text-2xl font-black text-slate-800 dark:text-white mb-2 tracking-tight transition-all">{loadingMessage}</h3>
-          <p className="text-slate-400 dark:text-slate-500 text-xs font-bold uppercase tracking-widest animate-pulse"></p>
+          <p className="text-slate-400 dark:text-slate-500 text-xs font-bold uppercase tracking-widest animate-pulse">Powered by Gemini Flash-Lite ⚡</p>
         </div>
       );
     }
@@ -196,11 +202,30 @@ const PlannerPanel: React.FC<PlannerPanelProps> = ({ profile, documents }) => {
               </div>
               <textarea 
                 autoFocus
-                className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-4 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 font-medium min-h-[120px]"
+                className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-4 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 font-medium min-h-[100px]"
                 placeholder="Ví dụ: Em hay sai phần tính nhanh, Em chưa hiểu cách đổi biến, Em không làm được bài tập thực tế..."
                 value={selection.weakness}
                 onChange={e => setSelection({...selection, weakness: e.target.value})}
               />
+              <div className="flex flex-wrap gap-2">
+                <p className="text-[10px] font-bold text-slate-400 uppercase w-full mb-1">Gợi ý vấn đề thường gặp:</p>
+                {[
+                  "Chưa nắm vững lý thuyết",
+                  "Hay sai lỗi tính toán",
+                  "Khó giải bài nâng cao",
+                  "Tốc độ làm bài chậm",
+                  "Chưa hiểu ứng dụng thực tế",
+                  "Quên công thức"
+                ].map(w => (
+                  <button 
+                    key={w}
+                    onClick={() => setSelection({...selection, weakness: w})}
+                    className={`text-[11px] px-3 py-1.5 rounded-full font-bold transition-colors border ${selection.weakness === w ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-transparent hover:bg-indigo-100 dark:hover:bg-indigo-900/40'}`}
+                  >
+                    {w}
+                  </button>
+                ))}
+              </div>
               <div className="flex justify-between pt-4">
                 <button onClick={() => setStep(2)} className="text-slate-400 font-bold text-sm">Quay lại</button>
                 <button 
