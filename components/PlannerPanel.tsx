@@ -108,7 +108,7 @@ const PlannerPanel: React.FC<PlannerPanelProps> = ({ profile, documents }) => {
             <RefreshCw className="animate-spin text-indigo-600 relative z-10" size={56} />
           </div>
           <h3 className="text-2xl font-black text-slate-800 dark:text-white mb-2 tracking-tight transition-all">{loadingMessage}</h3>
-          <p className="text-slate-400 dark:text-slate-500 text-xs font-bold uppercase tracking-widest animate-pulse"></p>
+          <p className="text-slate-400 dark:text-slate-500 text-xs font-bold uppercase tracking-widest animate-pulse">Powered by Gemini Flash-Lite ⚡</p>
         </div>
       );
     }
