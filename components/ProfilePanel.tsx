@@ -65,6 +65,13 @@ const ProfilePanel: React.FC<ProfilePanelProps> = ({ profile, onUpdateProfile })
       const analysis = await generateProfileAnalysis(profile);
       if (analysis) {
         setAiAnalysis(analysis);
+      } else {
+        setAiAnalysis({
+          status: "Lỗi hệ thống",
+          overview: "AI Study Copilot đang tạm thời bận hoặc có lỗi kết nối. Vui lòng thử lại sau giây lát.",
+          gaps: "Không thể phân tích dữ liệu lúc này.",
+          strategy: ["Kiểm tra lại kết nối mạng", "Thử nhấn làm mới lại"]
+        });
       }
     } catch (e) {
       console.error(e);
@@ -103,7 +110,9 @@ const ProfilePanel: React.FC<ProfilePanelProps> = ({ profile, onUpdateProfile })
     let num = parseFloat(clean);
     if (!isNaN(num) && num > 10) {
       if (clean.startsWith('10')) return '10';
-      return clean[0];
+      // Nếu nhập quá 10 mà không phải bắt đầu bằng 10 (ví dụ đang là 7 nhập thêm 8 thành 78)
+      // thì ưu tiên số vừa nhập sau cùng để hỗ trợ việc ghi đè khi bôi đen không hiệu quả hoặc nhầm lẫn
+      return clean[clean.length - 1];
     }
     if (clean === '10.') return '10';
     return clean;
@@ -405,7 +414,10 @@ const ProfilePanel: React.FC<ProfilePanelProps> = ({ profile, onUpdateProfile })
                             type="text" 
                             className="w-11 h-9 text-center bg-slate-100 dark:bg-slate-800 rounded-xl text-xs font-black focus:ring-2 focus:ring-indigo-500 outline-none transition-all appearance-none"
                             value={getDisplayValue(sub.name, 'frequent', g, idx)}
-                            onFocus={(e) => e.target.select()}
+                            onFocus={(e) => {
+                              const target = e.target as HTMLInputElement;
+                              setTimeout(() => target.select(), 0);
+                            }}
                             onBlur={() => setEditingGrade(null)}
                             onChange={e => updateGradeState(sub.name, 'frequent', e.target.value, idx)}
                           />
@@ -430,7 +442,10 @@ const ProfilePanel: React.FC<ProfilePanelProps> = ({ profile, onUpdateProfile })
                       type="text"
                       className="w-16 h-10 text-center bg-slate-100 dark:bg-slate-800 rounded-xl text-xs font-black border-2 border-indigo-100 dark:border-indigo-900/40 outline-none focus:ring-2 focus:ring-indigo-500"
                       value={getDisplayValue(sub.name, 'midterm', sub.grades.midterm)}
-                      onFocus={(e) => e.target.select()}
+                      onFocus={(e) => {
+                        const target = e.target as HTMLInputElement;
+                        setTimeout(() => target.select(), 0);
+                      }}
                       onBlur={() => setEditingGrade(null)}
                       onChange={e => updateGradeState(sub.name, 'midterm', e.target.value)}
                     />
@@ -440,7 +455,10 @@ const ProfilePanel: React.FC<ProfilePanelProps> = ({ profile, onUpdateProfile })
                       type="text"
                       className="w-16 h-10 text-center bg-slate-100 dark:bg-slate-800 rounded-xl text-xs font-black border-2 border-purple-100 dark:border-purple-900/40 outline-none focus:ring-2 focus:ring-purple-500"
                       value={getDisplayValue(sub.name, 'final', sub.grades.final)}
-                      onFocus={(e) => e.target.select()}
+                      onFocus={(e) => {
+                        const target = e.target as HTMLInputElement;
+                        setTimeout(() => target.select(), 0);
+                      }}
                       onBlur={() => setEditingGrade(null)}
                       onChange={e => updateGradeState(sub.name, 'final', e.target.value)}
                     />

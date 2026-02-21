@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Message, StudentProfile, Attachment } from '../types';
-import { chatWithAI } from '../geminiService';
+import { chatWithAIStream } from '../geminiService';
 import { Send, Bot, User, RefreshCw, Paperclip, Image as ImageIcon, Camera, X, FileText } from 'lucide-react';
 
 interface ChatPanelProps {
@@ -146,22 +146,32 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ profile, messages, setMessages })
     setPendingAttachments([]);
     setIsLoading(true);
 
+    const aiMsgId = (Date.now() + 1).toString();
+    const initialAiMsg: Message = {
+      id: aiMsgId,
+      role: 'model',
+      text: '',
+      timestamp: new Date()
+    };
+    setMessages(prev => [...prev, initialAiMsg]);
+
     try {
       const apiAttachments = currentAtts.map(att => ({
         data: att.base64,
         mimeType: att.file.type
       }));
       
-      const response = await chatWithAI([...messages, userMsg], profile, apiAttachments);
-      const aiMsg: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'model',
-        text: response || "Xin lỗi, mình đang gặp sự cố kết nối. Hãy thử lại sau nhé!",
-        timestamp: new Date()
-      };
-      setMessages(prev => [...prev, aiMsg]);
+      await chatWithAIStream(
+        [...messages, userMsg], 
+        profile, 
+        (text) => {
+          setMessages(prev => prev.map(m => m.id === aiMsgId ? { ...m, text } : m));
+        },
+        apiAttachments
+      );
     } catch (error) {
       console.error(error);
+      setMessages(prev => prev.map(m => m.id === aiMsgId ? { ...m, text: "Xin lỗi, mình đang gặp sự cố kết nối. Hãy thử lại sau nhé!" } : m));
     } finally {
       setIsLoading(false);
     }

@@ -66,22 +66,34 @@ const App: React.FC = () => {
       isActive: ["Toán", "Vật Lý", "Hóa Học", "Tiếng Anh", "Ngữ Văn"].includes(
         name,
       ),
-      proficiency: 70,
+      proficiency: 85,
       gaps: [],
       strengths: [],
       grades: {
-        frequent: [8.0, 9.0],
-        midterm: 8.5,
-        final: 9.0,
+        frequent: [8.5, 9.2, 8.8],
+        midterm: 8.7,
+        final: 9.3,
       },
     })),
     recentErrors: [
       {
-        topic: "Dao động cơ",
-        reason: "Nhầm lẫn giữa tần số và chu kỳ",
-        count: 3,
+        topic: "Động lực học chất điểm",
+        reason:
+          "Nhầm lẫn giữa lực đàn hồi và lực hồi phục trong hệ quy chiếu phi quán tính",
+        count: 2,
       },
-      { topic: "Tích phân", reason: "Sai dấu khi đổi biến", count: 2 },
+      {
+        topic: "Tích phân hàm ẩn",
+        reason:
+          "Sai sót trong việc xác định cận khi thực hiện phép đổi biến số loại 2",
+        count: 1,
+      },
+      {
+        topic: "Este hóa",
+        reason:
+          "Chưa tối ưu hóa được điều kiện cân bằng hóa học theo nguyên lý Le Chatelier",
+        count: 1,
+      },
     ],
   });
 

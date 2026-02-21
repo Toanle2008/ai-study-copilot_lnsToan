@@ -162,7 +162,7 @@ const SummaryPanel: React.FC<SummaryPanelProps> = ({ profile, documents }) => {
             <span className="w-2 h-2 bg-indigo-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
             <span className="w-2 h-2 bg-indigo-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
           </div>
-          <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">Sử dụng Gemini 3 Flash cho tốc độ siêu tốc</p>
+          <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest"></p>
         </div>
       </div>
     );
