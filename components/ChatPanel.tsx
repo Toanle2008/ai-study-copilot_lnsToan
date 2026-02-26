@@ -164,8 +164,8 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ profile, messages, setMessages })
       await chatWithAIStream(
         [...messages, userMsg], 
         profile, 
-        (text) => {
-          setMessages(prev => prev.map(m => m.id === aiMsgId ? { ...m, text } : m));
+        (chunk) => {
+          setMessages(prev => prev.map(m => m.id === aiMsgId ? { ...m, text: m.text + chunk } : m));
         },
         apiAttachments
       );

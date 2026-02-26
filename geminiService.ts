@@ -1,16 +1,65 @@
 
-import { GoogleGenAI, Type } from "@google/genai";
-import { Message, StudentProfile, Document, SubjectGrades } from "./types";
+import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
+import { Message, StudentProfile, SubjectGrades } from "./types";
 
-const getAIClient = () => {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey || apiKey === "") {
-    throw new Error("API_KEY_MISSING");
+// --- Constants ---
+const STABLE_MODEL = "gemini-3-flash-preview";
+const MAX_RETRIES = 2;
+const TIMEOUT_MS = 30000;
+const HISTORY_LIMIT = 3;
+
+export enum GeminiErrorType {
+  API_KEY_MISSING = "API_KEY_MISSING",
+  RATE_LIMIT = "RATE_LIMIT",
+  TIMEOUT = "TIMEOUT",
+  UNKNOWN_ERROR = "UNKNOWN_ERROR",
+  EMPTY_RESPONSE = "EMPTY_RESPONSE"
+}
+
+export class GeminiError extends Error {
+  constructor(public type: GeminiErrorType, message: string) {
+    super(message);
+    this.name = "GeminiError";
+  }
+}
+
+// --- Factory ---
+const getAIClient = (keyName: "GEMINI_API_KEY" | "GEMINI_API_KEY2" = "GEMINI_API_KEY") => {
+  const apiKey = process.env[keyName];
+  if (!apiKey) {
+    throw new GeminiError(GeminiErrorType.API_KEY_MISSING, `Environment variable ${keyName} is missing.`);
   }
   return new GoogleGenAI({ apiKey });
 };
 
-// Hàm phụ để tính TBM giúp AI có dữ liệu chính xác nhất
+// --- Helpers ---
+
+/**
+ * Exponential backoff retry logic with timeout protection
+ */
+async function withRetry<T>(fn: () => Promise<T>, retries = MAX_RETRIES): Promise<T> {
+  let lastError: any;
+  for (let i = 0; i <= retries; i++) {
+    try {
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new GeminiError(GeminiErrorType.TIMEOUT, "Request timed out")), TIMEOUT_MS)
+      );
+      return (await Promise.race([fn(), timeoutPromise])) as T;
+    } catch (error: any) {
+      lastError = error;
+      if (error.type === GeminiErrorType.TIMEOUT || error.message?.includes("429") || error.message?.includes("500")) {
+        if (i < retries) {
+          const delay = Math.pow(2, i) * 1000;
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+      }
+      throw error;
+    }
+  }
+  throw lastError;
+}
+
 const calculateAvg = (grades: SubjectGrades) => {
   let totalPoints = 0;
   let totalWeight = 0;
@@ -20,45 +69,49 @@ const calculateAvg = (grades: SubjectGrades) => {
   return totalWeight === 0 ? 0 : parseFloat((totalPoints / totalWeight).toFixed(2));
 };
 
-export const generateProfileAnalysis = async (profile: StudentProfile) => {
-  try {
-    const ai = getAIClient();
-    
-    const subjectsSummary = profile.subjects
+const minimizeProfile = (profile: StudentProfile) => {
+  return {
+    grade: profile.grade,
+    focus: profile.focusSubject,
+    subjects: profile.subjects
       .filter(s => s.isActive)
-      .map(s => ({
-        name: s.name,
-        avg: calculateAvg(s.grades),
-        frequent: s.grades.frequent,
-        midterm: s.grades.midterm,
-        final: s.grades.final
-      }));
+      .map(s => ({ n: s.name, a: calculateAvg(s.grades) })),
+    errors: profile.recentErrors.slice(0, 3).map(e => ({ t: e.topic, r: e.reason }))
+  };
+};
+
+const safeJsonParse = (text: string, fallback: any) => {
+  try {
+    // Clean potential markdown code blocks
+    const cleaned = text.replace(/```json|```/g, "").trim();
+    return JSON.parse(cleaned);
+  } catch (e) {
+    console.error("JSON Parse Error:", e);
+    return fallback;
+  }
+};
+
+// --- Exported Services ---
+
+export const generateProfileAnalysis = async (profile: StudentProfile) => {
+  return withRetry(async () => {
+    const ai = getAIClient("GEMINI_API_KEY");
+    const minimized = minimizeProfile(profile);
 
     const prompt = `
-      PHÂN TÍCH HỌC BẠ HỌC SINH (Thời gian: ${new Date().toLocaleString()})
-      Học sinh: ${profile.name} - Lớp: ${profile.grade}
-      Mục tiêu: ${profile.focusSubject}
-      
-      Dữ liệu điểm số hiện tại (Đã tính toán TBM):
-      ${JSON.stringify(subjectsSummary)}
-      
-      Lỗi sai gần đây: ${JSON.stringify(profile.recentErrors)}
+      Phân tích học bạ: ${minimized.grade}, Mục tiêu: ${minimized.focus}
+      Điểm TBM: ${JSON.stringify(minimized.subjects)}
+      Lỗi: ${JSON.stringify(minimized.errors)}
 
-      YÊU CẦU QUAN TRỌNG:
-      1. Đưa ra nhận xét CÁ NHÂN HÓA, SÁNG TẠO và KHÔNG TRÙNG LẶP.
-      2. Status: Một câu cực ngắn về phong độ (VD: "Bứt phá ngoạn mục", "Cảnh báo sa sút", "Ổn định").
-      3. Overview: Đánh giá dựa trên TBM các môn so với mục tiêu khối thi. Hãy dùng văn phong khích lệ nhưng thẳng thắn.
-      4. Gaps: Chỉ ra môn nào có điểm thành phần thấp bất thường hoặc cần chú ý.
-      5. Strategy: 3 hành động cụ thể, thực tế để cải thiện TBM. Mỗi lần làm mới hãy cố gắng đưa ra các gợi ý đa dạng hơn.
-
-      Trả về định dạng JSON: { "status": string, "overview": string, "gaps": string, "strategy": string[] }
+      Yêu cầu JSON:
+      { "status": string, "overview": string, "gaps": string, "strategy": string[] }
     `;
 
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: STABLE_MODEL,
       contents: prompt,
       config: {
-        temperature: 1,
+        temperature: 0,
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
@@ -72,14 +125,14 @@ export const generateProfileAnalysis = async (profile: StudentProfile) => {
         }
       }
     });
+
     const text = response.text;
-    if (!text) throw new Error("Empty response from AI");
-    return JSON.parse(text);
-  } catch (error) {
-    console.error("AI Analysis Error:", error);
-    // Trả về null để UI biết là lỗi và hiển thị trạng thái mặc định/lỗi
+    if (!text) throw new GeminiError(GeminiErrorType.EMPTY_RESPONSE, "AI returned empty content");
+    return safeJsonParse(text, null);
+  }).catch(err => {
+    console.error("Analysis failed:", err);
     return null;
-  }
+  });
 };
 
 export const chatWithAI = async (
@@ -87,91 +140,68 @@ export const chatWithAI = async (
   profile: StudentProfile,
   attachments?: { data: string; mimeType: string }[]
 ) => {
-  try {
-    const ai = getAIClient();
-    const history = messages.slice(0, -1).map((m) => ({
-      role: m.role,
-      parts: [{ text: m.text }],
-    }));
-
-    const lastMessage = messages[messages.length - 1];
-    const currentParts: any[] = [{ text: lastMessage.text }];
-    if (attachments && attachments.length > 0) {
-      attachments.forEach(att => {
-        currentParts.push({
-          inlineData: {
-            data: att.data,
-            mimeType: att.mimeType
-          }
-        });
-      });
-    }
-
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: [
-        ...history,
-        { role: 'user', parts: currentParts }
-      ],
-      config: {
-        systemInstruction: `Bạn là AI Study Copilot cho học sinh Việt Nam. 
-Hỗ trợ giải bài qua hình ảnh, phân tích tài liệu. 
-Công thức toán PHẢI dùng LaTeX $...$.
-Thông tin: ${JSON.stringify(profile)}.`,
-      },
-    });
-    return response.text;
-  } catch (error: any) {
-    return "Hệ thống đang bận, thử lại sau nhé! 🚀";
-  }
-};
-
-export const chatWithAIStream = async (
-  messages: Message[],
-  profile: StudentProfile,
-  onChunk: (text: string) => void,
-  attachments?: { data: string; mimeType: string }[]
-) => {
-  try {
-    const ai = getAIClient();
-    const history = messages.slice(0, -1).map((m) => ({
+  return withRetry(async () => {
+    const ai = getAIClient("GEMINI_API_KEY2");
+    const history = messages.slice(-HISTORY_LIMIT - 1, -1).map((m) => ({
       role: m.role === 'user' ? 'user' : 'model',
       parts: [{ text: m.text }],
     }));
 
     const lastMessage = messages[messages.length - 1];
     const currentParts: any[] = [{ text: lastMessage.text }];
-    if (attachments && attachments.length > 0) {
+    
+    if (attachments) {
       attachments.forEach(att => {
-        currentParts.push({
-          inlineData: {
-            data: att.data,
-            mimeType: att.mimeType
-          }
-        });
+        currentParts.push({ inlineData: { data: att.data, mimeType: att.mimeType } });
+      });
+    }
+
+    const response = await ai.models.generateContent({
+      model: STABLE_MODEL,
+      contents: [...history, { role: 'user', parts: currentParts }],
+      config: {
+        systemInstruction: `Bạn là AI Study Copilot cho học sinh Việt Nam. Hỗ trợ giải bài, phân tích tài liệu. Dùng LaTeX $...$ cho công thức. Thông tin: ${JSON.stringify(minimizeProfile(profile))}.`,
+      },
+    });
+
+    return response.text || "Hệ thống không phản hồi.";
+  }).catch(() => "Hệ thống đang bận, thử lại sau nhé! 🚀");
+};
+
+export const chatWithAIStream = async (
+  messages: Message[],
+  profile: StudentProfile,
+  onChunk: (incrementalText: string) => void,
+  attachments?: { data: string; mimeType: string }[]
+) => {
+  try {
+    const ai = getAIClient("GEMINI_API_KEY2");
+    const history = messages.slice(-HISTORY_LIMIT - 1, -1).map((m) => ({
+      role: m.role === 'user' ? 'user' : 'model',
+      parts: [{ text: m.text }],
+    }));
+
+    const lastMessage = messages[messages.length - 1];
+    const currentParts: any[] = [{ text: lastMessage.text }];
+    
+    if (attachments) {
+      attachments.forEach(att => {
+        currentParts.push({ inlineData: { data: att.data, mimeType: att.mimeType } });
       });
     }
 
     const response = await ai.models.generateContentStream({
-      model: "gemini-3-flash-preview",
-      contents: [
-        ...history,
-        { role: 'user', parts: currentParts }
-      ],
+      model: STABLE_MODEL,
+      contents: [...history, { role: 'user', parts: currentParts }],
       config: {
-        systemInstruction: `Bạn là AI Study Copilot cho học sinh Việt Nam. 
-Hỗ trợ giải bài qua hình ảnh, phân tích tài liệu. 
-Công thức toán PHẢI dùng LaTeX $...$.
-Thông tin: ${JSON.stringify(profile)}.`,
+        systemInstruction: `Bạn là AI Study Copilot cho học sinh Việt Nam. Hỗ trợ giải bài, phân tích tài liệu. Dùng LaTeX $...$ cho công thức. Thông tin: ${JSON.stringify(minimizeProfile(profile))}.`,
       },
     });
 
-    let fullText = "";
     for await (const chunk of response) {
       const chunkText = chunk.text;
       if (chunkText) {
-        fullText += chunkText;
-        onChunk(fullText);
+        onChunk(chunkText); // Sending incremental text
       }
     }
   } catch (error: any) {
@@ -181,10 +211,10 @@ Thông tin: ${JSON.stringify(profile)}.`,
 };
 
 export const analyzeDocument = async (base64Data: string, mimeType: string) => {
-  try {
-    const ai = getAIClient();
+  return withRetry(async () => {
+    const ai = getAIClient("GEMINI_API_KEY");
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: STABLE_MODEL,
       contents: {
         parts: [
           { inlineData: { data: base64Data, mimeType } },
@@ -193,8 +223,6 @@ export const analyzeDocument = async (base64Data: string, mimeType: string) => {
       },
       config: { thinkingConfig: { thinkingBudget: 0 } }
     });
-    return response.text;
-  } catch (error) {
-    return "Không thể phân tích tài liệu.";
-  }
+    return response.text || "Không thể phân tích tài liệu.";
+  }).catch(() => "Không thể phân tích tài liệu.");
 };
