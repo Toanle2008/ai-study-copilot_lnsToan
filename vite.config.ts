@@ -10,12 +10,12 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react()],
     define: {
-      // Expose the API key from the environment to the client side
-      'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY || env.VITE_GEMINI_API_KEY || ''),
-      'process.env.GEMINI_API_KEY2': JSON.stringify(env.GEMINI_API_KEY2 || env.VITE_GEMINI_API_KEY2 || ''),
-      'process.env.API_KEY': JSON.stringify(env.API_KEY || env.GEMINI_API_KEY || ''),
-      // Provide a default empty object for process.env to prevent ReferenceErrors in the browser
-      'process.env': {} 
+      // Expose the API keys as a full object to support dynamic access like process.env[keyName]
+      'process.env': JSON.stringify({
+        GEMINI_API_KEY: env.GEMINI_API_KEY || env.VITE_GEMINI_API_KEY || '',
+        GEMINI_API_KEY2: env.GEMINI_API_KEY2 || env.VITE_GEMINI_API_KEY2 || '',
+        API_KEY: env.API_KEY || env.GEMINI_API_KEY || ''
+      })
     },
     server: {
       port: 3000,
